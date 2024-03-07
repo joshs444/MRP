@@ -1,0 +1,161 @@
+import pandas as pd
+
+# File names
+sales_inventory_filename = 'Sales & Inventory.xlsx'
+bom_filename = 'Blownout BOMs.xlsx'
+
+# Load the Sales & Inventory data and convert 'No_' column to string
+sales_inventory_df = pd.read_excel(sales_inventory_filename, sheet_name='Sheet1')
+sales_inventory_df['No_'] = sales_inventory_df['No_'].astype(int)
+print("Sales & Inventory Data Loaded and Converted Successfully")
+
+# Load the Blownout BOMs data and convert specified columns to string
+bom_df = pd.read_excel(bom_filename, sheet_name='Sheet1')
+columns_to_convert = ['Main No_', 'Production No_', 'Component No_', 'Level', 'Order']
+bom_df[columns_to_convert] = bom_df[columns_to_convert].astype(int)
+print("Blownout BOMs Data Loaded and Converted Successfully")
+
+# Display the first few rows of each dataframe to verify successful loading and conversion
+print("\nSales & Inventory Data Preview:")
+print(sales_inventory_df.head())
+print("\nBlownout BOMs Data Preview:")
+print(bom_df.head())
+
+
+
+import pandas as pd
+
+
+# Merge the DataFrames, focusing on the 'Main No_' and 'No_' columns
+merged_df = pd.merge(bom_df, sales_inventory_df[['No_', 'Open Sales QTY']], left_on='Main No_', right_on='No_', how='left')
+
+# Calculate the Adjusted Total Quantity by multiplying 'Open Sales QTY' by 'QTY Per'
+# Adjust this calculation if it's meant to use 'Total Quantity' instead of 'QTY Per'
+merged_df['Adjusted Total Quantity'] = merged_df['Open Sales QTY'] * merged_df['QTY Per']
+
+# Dropping the 'No_' column from sales_inventory_df as it's redundant after merge
+merged_df.drop('No_', axis=1, inplace=True)
+
+# Display the first few rows of the merged dataframe to verify the operation
+print("\nMerged Data Preview with Only Open Sales QTY and Adjusted Total Quantity:")
+print(merged_df.head())
+
+
+# Assuming sales_inventory_df and merged_df are already defined and loaded as per your provided code snippets
+
+merged_df['QTY Needed'] = 0
+merged_df['Inventory Used'] = False  # Initialize tracking of whether inventory was used
+
+# Create a copy of the sales_inventory_df to modify inventory quantities dynamically
+dynamic_inventory_df = sales_inventory_df.copy()
+
+# Add "Starting Inventory QTY" column, copying the initial values from "Inventory QTY"
+dynamic_inventory_df['Starting Inventory QTY'] = dynamic_inventory_df['Inventory QTY'].copy()
+
+# Optionally remove "Open Sales QTY" column from dynamic_inventory_df if it exists
+if 'Open Sales QTY' in dynamic_inventory_df.columns:
+    dynamic_inventory_df.drop(columns=['Open Sales QTY'], inplace=True)
+
+for index, row in merged_df.iterrows():
+    inventory_row = dynamic_inventory_df[dynamic_inventory_df['No_'] == row['Component No_']]
+    
+    if not inventory_row.empty:
+        inventory_qty = inventory_row['Inventory QTY'].values[0]
+        adjusted_qty = row['Adjusted Total Quantity']
+        qty_needed = max(adjusted_qty - inventory_qty, 0)
+        merged_df.at[index, 'QTY Needed'] = qty_needed
+        merged_df.at[index, 'Inventory Used'] = qty_needed == 0
+        new_inventory_qty = max(inventory_qty - adjusted_qty, 0)
+        dynamic_inventory_df.loc[dynamic_inventory_df['No_'] == row['Component No_'], 'Inventory QTY'] = new_inventory_qty
+    else:
+        merged_df.at[index, 'QTY Needed'] = adjusted_qty
+        merged_df.at[index, 'Inventory Used'] = False
+
+
+# Example of adjusting the code for subassembly availability
+for index, row in merged_df.iterrows():
+    component_no = row['Component No_']
+    adjusted_qty = row['Adjusted Total Quantity']
+    
+    # Check if the component is part of a subassembly that is in stock
+    # This step assumes you have a way to determine if a component is part of an in-stock subassembly
+    # You would need a function or logic here to determine that
+    is_subassembly_in_stock = check_subassembly_stock_status(component_no, dynamic_inventory_df)
+    
+    if is_subassembly_in_stock:
+        # If the subassembly is in stock, set 'Inventory Used' to True, and 'QTY Needed' to 0 for this component
+        merged_df.at[index, 'Inventory Used'] = True
+        merged_df.at[index, 'QTY Needed'] = 0
+    else:
+        # Proceed with existing logic if no in-stock subassembly is found
+        inventory_row = dynamic_inventory_df[dynamic_inventory_df['No_'] == component_no]
+        if not inventory_row.empty:
+            inventory_qty = inventory_row['Inventory QTY'].values[0]
+            qty_needed = max(adjusted_qty - inventory_qty, 0)
+            merged_df.at[index, 'QTY Needed'] = qty_needed
+            merged_df.at[index, 'Inventory Used'] = qty_needed == 0
+            new_inventory_qty = max(inventory_qty - adjusted_qty, 0)
+            dynamic_inventory_df.loc[dynamic_inventory_df['No_'] == component_no, 'Inventory QTY'] = new_inventory_qty
+        else:
+            merged_df.at[index, 'QTY Needed'] = adjusted_qty
+            merged_df.at[index, 'Inventory Used'] = False
+
+# Assuming sales_inventory_df and merged_df are already defined and loaded as per your provided code snippets
+
+merged_df['QTY Needed'] = 0
+merged_df['Inventory Used'] = False  # Initialize tracking of whether inventory was used
+
+# Create a copy of the sales_inventory_df to modify inventory quantities dynamically
+dynamic_inventory_df = sales_inventory_df.copy()
+
+# Add "Starting Inventory QTY" column, copying the initial values from "Inventory QTY"
+dynamic_inventory_df['Starting Inventory QTY'] = dynamic_inventory_df['Inventory QTY'].copy()
+
+# Optionally remove "Open Sales QTY" column from dynamic_inventory_df if it exists
+if 'Open Sales QTY' in dynamic_inventory_df.columns:
+    dynamic_inventory_df.drop(columns=['Open Sales QTY'], inplace=True)
+
+for index, row in merged_df.iterrows():
+    inventory_row = dynamic_inventory_df[dynamic_inventory_df['No_'] == row['Component No_']]
+    
+    if not inventory_row.empty:
+        inventory_qty = inventory_row['Inventory QTY'].values[0]
+        adjusted_qty = row['Adjusted Total Quantity']
+        qty_needed = max(adjusted_qty - inventory_qty, 0)
+        merged_df.at[index, 'QTY Needed'] = qty_needed
+        merged_df.at[index, 'Inventory Used'] = qty_needed == 0
+        new_inventory_qty = max(inventory_qty - adjusted_qty, 0)
+        dynamic_inventory_df.loc[dynamic_inventory_df['No_'] == row['Component No_'], 'Inventory QTY'] = new_inventory_qty
+    else:
+        merged_df.at[index, 'QTY Needed'] = adjusted_qty
+        merged_df.at[index, 'Inventory Used'] = False
+
+dynamic_inventory_df['Inventory Change'] = dynamic_inventory_df['Starting Inventory QTY'] - dynamic_inventory_df['Inventory QTY']
+
+# Ensure 'Component No_' in merged_df is converted to the same type as 'No_' in dynamic_inventory_df for successful merge
+merged_df['Component No_'] = merged_df['Component No_'].astype(dynamic_inventory_df['No_'].dtype)
+
+# Calculate "Usage Count" and "No Usage Count"
+usage_count = merged_df[merged_df['Inventory Used']].groupby('Component No_').size().reset_index(name='Usage Count')
+no_usage_count = merged_df[~merged_df['Inventory Used']].groupby('Component No_').size().reset_index(name='No Usage Count')
+
+# Merge "Usage Count" and "No Usage Count" back into dynamic_inventory_df and cleanup
+dynamic_inventory_df = pd.merge(dynamic_inventory_df, usage_count, how='left', left_on='No_', right_on='Component No_').fillna({'Usage Count': 0})
+dynamic_inventory_df = pd.merge(dynamic_inventory_df, no_usage_count, how='left', left_on='No_', right_on='Component No_').fillna({'No Usage Count': 0})
+
+# Remove unwanted columns resulting from merge operations
+dynamic_inventory_df.drop(columns=['Component No_'], errors='ignore', inplace=True)
+
+# Additionally, if 'Component No__y' and 'Component No__x' were created, remove them as well
+columns_to_drop = ['Component No__y', 'Component No__x']
+for column in columns_to_drop:
+    if column in dynamic_inventory_df.columns:
+        dynamic_inventory_df.drop(columns=[column], inplace=True)
+
+# Display updated DataFrames for verification
+print("\nUpdated Merged DataFrame with 'QTY Needed' and 'Inventory Used':")
+print(merged_df.head())
+
+print("\nUpdated Dynamic Inventory DataFrame with Calculated Columns:")
+print(dynamic_inventory_df[['No_', 'Starting Inventory QTY', 'Inventory QTY', 'Inventory Change', 'Usage Count', 'No Usage Count']].head())
+
